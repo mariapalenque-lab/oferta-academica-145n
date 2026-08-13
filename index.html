@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIGPA-CEDU | Sistema de Gestión Académica</title>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (XLSX) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- jsPDF & html2canvas for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: { 800: '#0b1329', 900: '#060b18', 700: '#152243' },
+                        excelBlue: '#1d6f42'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0b1329; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+        
+        table td.day-cell {
+            border-left: none !important;
+            border-right: none !important;
+            border-top: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            background-color: #ffffff !important;
+            padding: 0 !important;
+            height: 100%;
+        }
+        .unified-row {
+            min-height: 58px;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-800">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-navy-900 text-white flex flex-col justify-between shrink-0 shadow-xl z-20">
+        <div>
+            <div class="p-5 flex items-center gap-3 border-b border-slate-800">
+                <div class="bg-red-700 text-white font-bold rounded-full w-10 h-10 flex items-center justify-center text-xs shadow-md border border-red-500">
+                    UAGRM
+                </div>
+                <div>
+                    <h1 class="font-bold text-sm tracking-wide text-white leading-tight">SIGPA-CEDU</h1>
+                    <p class="text-[11px] text-blue-400 font-medium">Ciencias de la Educación</p>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-b border-slate-800/60">
+                <label class="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Rol de Usuario:</label>
+                <div class="mt-1 relative">
+                    <select class="w-full bg-navy-800 border border-slate-700 text-xs text-emerald-400 rounded-lg p-2.5 appearance-none focus:outline-none focus:border-indigo-500 font-medium">
+                        <option>Nivel 1 — Administración</option>
+                    </select>
+                </div>
+            </div>
+            <nav class="p-3 space-y-1.5">
+                <button onclick="switchTab('oferta')" id="navOferta" class="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/30 transition-all text-left">
+                    <i class="fa-solid fa-table text-sm"></i>
+                    <span>Maestro de Oferta (Excel)</span>
+                </button>
+                <button onclick="switchTab('docentes')" id="navDocentes" class="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-slate-300 hover:bg-navy-800 hover:text-white rounded-xl transition-all text-left">
+                    <i class="fa-solid fa-chalkboard-user text-emerald-400 text-sm"></i>
+                    <span>Carga Horaria Docentes</span>
+                </button>
+                <label for="excelImporter" class="cursor-pointer flex items-center gap-3 px-4 py-3 text-xs font-medium text-slate-300 hover:bg-navy-800 hover:text-white rounded-xl transition-all">
+                    <i class="fa-solid fa-file-excel text-emerald-400 text-sm"></i>
+                    <span>Importar Excel (.xlsx)</span>
+                    <input type="file" id="excelImporter" accept=".xlsx, .xls" class="hidden" multiple onchange="handleExcelUpload(event)">
+                </label>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-800 text-[11px] text-slate-400 text-center">
+            <p>© 2026 Derechos Reservados</p>
+            <p class="font-semibold text-indigo-300 mt-0.5">María Elizabeth Palenque Cortez</p>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-100">
+        <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
+            <div>
+                <h2 class="text-base font-bold text-slate-900 tracking-tight">UNIVERSIDAD AUTÓNOMA GABRIEL RENÉ MORENO</h2>
+                <p class="text-xs text-slate-500 font-medium">Facultad de Humanidades — Carrera Ciencias de la Educación | <span class="text-slate-700 font-semibold">Plan 145 N | Gestión 2026</span></p>
+            </div>
+            <div id="headerActions" class="flex items-center gap-3">
+                <button onclick="openAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow transition-all">
+                    <i class="fa-solid fa-plus"></i> Añadir Registro
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar" id="exportableArea">
+            
+            <!-- ALERT BANNER -->
+            <div id="uploadAlert" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-2 font-medium">
+                    <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
+                    <span id="uploadAlertText">¡Datos sincronizados correctamente!</span>
+                </div>
+                <button onclick="document.getElementById('uploadAlert').classList.add('hidden')" class="text-emerald-700"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- VISTA 1: MAESTRO DE OFERTA -->
+            <div id="viewOferta" class="space-y-6">
+                <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 flex-1 min-w-[280px]">
+                        <div class="relative w-full">
+                            <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Buscar por materia, sigla o docente..." class="w-full border border-slate-300 bg-slate-50 text-xs rounded-lg pl-8 pr-3 py-2.5 focus:bg-white focus:outline-none focus:border-indigo-500">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-xs text-slate-400"></i>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="filterSemestre" onchange="applyFilters()" class="border border-slate-300 bg-slate-50 text-xs rounded-lg p-2.5 focus:bg-white focus:outline-none">
+                            <option value="all">Todos los Semestres / Menciones</option>
+                            <option value="PRIMER SEMESTRE">Primer Semestre</option>
+                            <option value="SEGUNDO SEMESTRE">Segundo Semestre</option>
+                            <option value="TERCER SEMESTRE">Tercer Semestre</option>
+                            <option value="CUARTO SEMESTRE">Cuarto Semestre</option>
+                            <option value="QUINTO SEMESTRE">Quinto Semestre</option>
+                            <option value="SEXTO SEMESTRE">Sexto Semestre</option>
+                            <option value="SEPTIMO SEMESTRE">Séptimo Semestre</option>
+                            <option value="OCTAVO SEMESTRE">Octavo Semestre</option>
+                            <option value="NOVENO SEMESTRE">Noveno Semestre</option>
+                            <option value="PSICOPEDAGOGIA">Mención: Psicopedagogía</option>
+                            <option value="EDUCACION SOCIAL">Mención: Educación Social</option>
+                            <option value="TECNOLOGIA EDUCATIVA">Mención: Tecnología Educativa</option>
+                        </select>
+                        <button onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5 shadow transition-all" title="Descargar en Excel">
+                            <i class="fa-solid fa-file-excel"><b>Excel</b></i>
+                        </button>
+                        <button onclick="exportToPDF()" class="bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5 shadow transition-all" title="Descargar en PDF Completo">
+                            <i class="fa-solid fa-file-pdf"><b>PDF</b></i>
+                        </button>
+                        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5" title="Imprimir">
+                            <i class="fa-solid fa-print"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tablesContainer" class="space-y-6">
+                    <!-- Tablas generadas dinámicamente -->
+                </div>
+            </div>
+
+            <!-- VISTA 2: CARGA HORARIA DOCENTES -->
+            <div id="viewDocentes" class="hidden space-y-6">
+                <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 flex-1 min-w-[280px]">
+                        <div class="relative w-full">
+                            <input type="text" id="searchDocenteInput" oninput="renderDocentesView()" placeholder="Buscar docente por nombre o código..." class="w-full border border-slate-300 bg-slate-50 text-xs rounded-lg pl-8 pr-3 py-2.5 focus:bg-white focus:outline-none focus:border-indigo-500">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-xs text-slate-400"></i>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="sortDocenteBy" onchange="renderDocentesView()" class="border border-slate-300 bg-slate-50 text-xs rounded-lg p-2.5 focus:bg-white focus:outline-none font-medium">
+                            <option value="name_asc">Ordenar: Nombre (A - Z)</option>
+                            <option value="name_desc">Ordenar: Nombre (Z - A)</option>
+                            <option value="hours_desc">Ordenar: Mayor Carga Horaria</option>
+                        </select>
+                        <button onclick="exportDocentesExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5 shadow transition-all" title="Descargar Carga Docente a Excel">
+                            <i class="fa-solid fa-file-excel"><b>Excel</b></i>
+                        </button>
+                        <button onclick="exportDocentesPDF()" class="bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5 shadow transition-all" title="Descargar Carga Docente a PDF">
+                            <i class="fa-solid fa-file-pdf"><b>PDF</b></i>
+                        </button>
+                        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-2.5 rounded-lg flex items-center gap-1.5" title="Imprimir Resumen">
+                            <i class="fa-solid fa-print"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-900 text-white p-4 rounded-xl shadow-md flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-indigo-800 p-2.5 rounded-lg text-emerald-400 text-base"><i class="fa-solid fa-calculator"></i></div>
+                        <div>
+                            <h4 class="font-bold text-sm">Resumen Consolidado de Carga Horaria Docente</h4>
+                            <p class="text-indigo-200">Suma total de horas asignadas agrupadas por docente según el maestro de oferta actual.</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] uppercase font-semibold text-indigo-300 block">Total Docentes Activos</span>
+                        <span id="totalDocentesCount" class="text-lg font-extrabold text-emerald-400">0</span>
+                    </div>
+                </div>
+
+                <div id="docentesContainer" class="space-y-4">
+                    <!-- Contenido dinámico de docentes -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODAL PARA AÑADIR / EDITAR -->
+    <div id="crudModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <div class="bg-navy-900 text-white px-5 py-4 flex items-center justify-between">
+                <h3 id="modalTitle" class="font-bold text-sm">Añadir Nuevo Registro al Maestro de Oferta</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <input type="hidden" id="editIndex" value="-1">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Semestre / Mención:</label>
+                    <input type="text" id="mSemestre" class="w-full border rounded p-2" placeholder="EJ. PRIMER SEMESTRE o MENCIÓN: TECNOLOGÍA EDUCATIVA">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Sigla:</label>
+                        <input type="text" id="mSigla" class="w-full border rounded p-2" placeholder="EJ. TEC454">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Grupo / Paralelo:</label>
+                        <input type="text" id="mGrupo" class="w-full border rounded p-2" placeholder="EJ. K2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Materia:</label>
+                    <input type="text" id="mMateria" class="w-full border rounded p-2" placeholder="EJ. TALLER DE GESTIÓN DE NUEVOS CONOCIMIENTOS CIENTÍFICOS">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Docente:</label>
+                    <input type="text" id="mDocente" class="w-full border rounded p-2" placeholder="EJ. BRAVO REYES CARLOS">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Cód. Docente:</label>
+                        <input type="text" id="mCodDocente" class="w-full border rounded p-2" placeholder="EJ. 3243">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Horas:</label>
+                        <input type="text" id="mHoras" class="w-full border rounded p-2" placeholder="EJ. 0">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Horario General:</label>
+                    <input type="text" id="mHorario" class="w-full border rounded p-2" placeholder="EJ. 13:45-15:15">
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Lunes:</label>
+                        <input type="text" id="mLunes" class="w-full border rounded p-2" placeholder="-">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Martes:</label>
+                        <input type="text" id="mMartes" class="w-full border rounded p-2" placeholder="-">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Miércoles:</label>
+                        <input type="text" id="mMiercoles" class="w-full border rounded p-2" placeholder="-">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Jueves:</label>
+                        <input type="text" id="mJueves" class="w-full border rounded p-2" placeholder="Aula 19">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Viernes:</label>
+                        <input type="text" id="mViernes" class="w-full border rounded p-2" placeholder="-">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Sábado:</label>
+                        <input type="text" id="mSabado" class="w-full border rounded p-2" placeholder="Aula 17">
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-50 px-5 py-3 border-t flex justify-end gap-2 text-xs">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-300 hover:bg-slate-400 font-semibold rounded">Cancelar</button>
+                <button onclick="saveRecord()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">Guardar Registro</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        let masterData = [
+            { semestre: "PRIMER SEMESTRE", grupo: "A", materia: "SOCIOLOGIA GENERAL", sigla: "CSO131", docente: "CARLOS REINAGA REMIGIO", codDocente: "3243", horario: "13:45-15:15", horas: "32", lunes: "Aula 7", martes: "Aula 7", miercoles: "Aula 7", jueves: "", viernes: "Aula 7", sabado: "" }
+        ];
+
+        let currentTab = 'oferta';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            const navOferta = document.getElementById("navOferta");
+            const navDocentes = document.getElementById("navDocentes");
+            const viewOferta = document.getElementById("viewOferta");
+            const viewDocentes = document.getElementById("viewDocentes");
+            const headerActions = document.getElementById("headerActions");
+
+            if (tab === 'oferta') {
+                navOferta.className = "w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/30 transition-all text-left";
+                navDocentes.className = "w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-slate-300 hover:bg-navy-800 hover:text-white rounded-xl transition-all text-left";
+                viewOferta.classList.remove("hidden");
+                viewDocentes.classList.add("hidden");
+                headerActions.innerHTML = `<button onclick="openAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow transition-all"><i class="fa-solid fa-plus"></i> Añadir Registro</button>`;
+                applyFilters();
+            } else {
+                navDocentes.className = "w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-white bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/30 transition-all text-left";
+                navOferta.className = "w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-slate-300 hover:bg-navy-800 hover:text-white rounded-xl transition-all text-left";
+                viewDocentes.classList.remove("hidden");
+                viewOferta.classList.add("hidden");
+                headerActions.innerHTML = `<span class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg font-bold text-xs"><i class="fa-solid fa-user-check mr-1.5"></i> Módulo de Gestión Docente</span>`;
+                renderDocentesView();
+            }
+        }
+
+        function formatExcelTime(val) {
+            if (!val || val === "nan" || val === "-" || String(val).trim() === "") return "";
+            const str = String(val).trim();
+            const num = Number(str);
+            if (!isNaN(num) && num > 0 && num < 1) {
+                const totalMinutes = Math.round(num * 24 * 60);
+                const hrs = Math.floor(totalMinutes / 60);
+                const mins = totalMinutes % 60;
+                return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+            }
+            return str;
+        }
+
+        function renderIntegratedCell(dayVal, materiaName, horarioVal) {
+            if (!dayVal || dayVal === '-' || dayVal === 'nan' || String(dayVal).trim() === '') {
+                return '<div class="unified-row w-full flex items-center justify-center bg-white text-slate-300 font-medium py-2">-</div>';
+            }
+            
+            const cleanHorario = formatExcelTime(horarioVal) || '';
+            
+            return `
+                <div class="unified-row w-full py-1.5 px-1 flex flex-col items-center justify-center bg-white leading-tight">
+                    ${cleanHorario ? `<span class="text-indigo-600 text-[9px] font-extrabold mb-0.5"><i class="fa-regular fa-clock mr-0.5"></i>${cleanHorario}</span>` : ''}
+                    <span class="text-slate-800 text-[10px] text-center font-bold">${dayVal}</span>
+                    <span class="text-slate-500 text-[9px] text-center italic mt-0.5">${materiaName}</span>
+                </div>
+            `;
+        }
+
+        function renderExcelTables(data) {
+            const container = document.getElementById("tablesContainer");
+            container.innerHTML = "";
+
+            if (data.length === 0) {
+                container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 italic shadow-sm">No hay registros coincidentes.</div>`;
+                return;
+            }
+
+            const groups = {};
+            data.forEach((item, idx) => {
+                const key = `${item.semestre}___GRUPO ${item.grupo}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push({ ...item, originalIndex: idx });
+            });
+
+            for (const [key, rows] of Object.entries(groups)) {
+                const [semestre, grupoName] = key.split("___");
+
+                const tableCard = document.createElement("div");
+                tableCard.className = "bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden mb-6";
+
+                let htmlContent = `
+                    <div class="bg-yellow-400 text-navy-900 font-extrabold text-center py-1.5 text-xs uppercase tracking-wider border-b border-navy-900">
+                        ${semestre}
+                    </div>
+                    <div class="bg-blue-600 text-white font-bold text-center py-1 text-xs uppercase tracking-wider border-b border-navy-900">
+                        ${grupoName}
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-navy-900 text-white text-[11px] font-bold uppercase border-b border-slate-700">
+                                    <th class="py-2.5 px-3 border-r border-slate-700">MATERIA</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700">SIGLA</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700">GRUPO</th>
+                                    <th class="py-2.5 px-3 border-r border-slate-700">DOCENTE</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-indigo-950 text-indigo-200">CÓD. DOCENTE</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-emerald-950 text-emerald-200">HORAS</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">LUNES</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">MARTES</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">MIÉRCOLES</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">JUEVES</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">VIERNES</th>
+                                    <th class="py-2.5 px-2 text-center border-r border-slate-700 bg-sky-900">SÁBADO</th>
+                                    <th class="py-2.5 px-2 text-center bg-slate-800 action-col">ACCIONES</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 font-medium text-slate-700">
+                `;
+
+                rows.forEach((r) => {
+                    const cleanHoras = formatExcelTime(r.horas);
+                    const cleanHorario = formatExcelTime(r.horario);
+
+                    htmlContent += `
+                        <tr class="hover:bg-slate-50/80 transition-colors">
+                            <td class="py-2 px-3 font-semibold text-slate-900 border-r border-slate-200 align-middle">${r.materia}</td>
+                            <td class="py-2 px-2 text-center font-bold text-navy-900 border-r border-slate-200 align-middle">${r.sigla}</td>
+                            <td class="py-2 px-2 text-center border-r border-slate-200 align-middle">${r.grupo}</td>
+                            <td class="py-2 px-3 border-r border-slate-200 text-slate-600 align-middle">${r.docente}</td>
+                            <td class="py-2 px-2 text-center font-mono font-bold text-red-600 bg-red-50/40 border-r border-slate-200 align-middle">${r.codDocente || '-'}</td>
+                            <td class="py-2 px-2 text-center font-bold text-emerald-700 bg-emerald-50/40 border-r border-slate-200 align-middle">${cleanHoras || '-'}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.lunes, r.materia, cleanHorario)}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.martes, r.materia, cleanHorario)}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.miercoles, r.materia, cleanHorario)}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.jueves, r.materia, cleanHorario)}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.viernes, r.materia, cleanHorario)}</td>
+                            <td class="day-cell align-middle">${renderIntegratedCell(r.sabado, r.materia, cleanHorario)}</td>
+                            <td class="py-2 px-2 text-center bg-slate-50 align-middle action-col">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <button onclick="openEditModal(${r.originalIndex})" title="Editar" class="p-1 text-indigo-600 hover:text-indigo-900"><i class="fa-solid fa-pen text-xs"></i></button>
+                                    <button onclick="deleteRecord(${r.originalIndex})" title="Eliminar" class="p-1 text-rose-500 hover:text-rose-800"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                htmlContent += `</tbody></table></div>`;
+                tableCard.innerHTML = htmlContent;
+                container.appendChild(tableCard);
+            }
+        }
+
+        function renderDocentesView() {
+            const container = document.getElementById("docentesContainer");
+            const searchQuery = document.getElementById("searchDocenteInput").value.toLowerCase();
+            const sortBy = document.getElementById("sortDocenteBy").value;
+
+            const docentesMap = {};
+            masterData.forEach(item => {
+                let docName = (item.docente && item.docente.trim() !== "" && item.docente !== "nan") ? item.docente.trim() : "DOCENTE NO ASIGNADO";
+                let codDoc = (item.codDocente && item.codDocente.trim() !== "" && item.codDocente !== "nan") ? item.codDocente.trim() : "S/C";
+
+                let key = `${docName}___${codDoc}`;
+                if (!docentesMap[key]) {
+                    docentesMap[key] = {
+                        nombre: docName,
+                        codigo: codDoc,
+                        materias: []
+                    };
+                }
+                docentesMap[key].materias.push(item);
+            });
+
+            let docentesList = Object.values(docentesMap);
+
+            if (searchQuery) {
+                docentesList = docentesList.filter(d => 
+                    d.nombre.toLowerCase().includes(searchQuery) || 
+                    d.codigo.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            docentesList.sort((a, b) => {
+                if (sortBy === 'name_asc') {
+                    return a.nombre.localeCompare(b.nombre);
+                } else if (sortBy === 'name_desc') {
+                    return b.nombre.localeCompare(a.nombre);
+                } else if (sortBy === 'hours_desc') {
+                    let totalA = a.materias.reduce((sum, m) => sum + (parseFloat(formatExcelTime(m.horas)) || 0), 0);
+                    let totalB = b.materias.reduce((sum, m) => sum + (parseFloat(formatExcelTime(m.horas)) || 0), 0);
+                    return totalB - totalA;
+                }
+            });
+
+            document.getElementById("totalDocentesCount").textContent = docentesList.length;
+            container.innerHTML = "";
+
+            if (docentesList.length === 0) {
+                container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 italic shadow-sm">No se encontraron docentes con los criterios de búsqueda.</div>`;
+                return;
+            }
+
+            docentesList.forEach((doc, idx) => {
+                let totalHorasDocente = 0;
+                doc.materias.forEach(m => {
+                    let h = parseFloat(formatExcelTime(m.horas));
+                    if (!isNaN(h)) totalHorasDocente += h;
+                });
+
+                let card = document.createElement("div");
+                card.className = "bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden mb-4";
+
+                let rowsHtml = "";
+                doc.materias.forEach(m => {
+                    let hNum = formatExcelTime(m.horas) || '0';
+                    rowsHtml += `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-3 border-b border-slate-200 font-semibold text-slate-900">${m.materia}</td>
+                            <td class="py-2.5 px-2 text-center border-b border-slate-200 font-bold text-navy-900">${m.sigla}</td>
+                            <td class="py-2.5 px-2 text-center border-b border-slate-200">${m.semestre}</td>
+                            <td class="py-2.5 px-2 text-center border-b border-slate-200">${m.grupo}</td>
+                            <td class="py-2.5 px-2 text-center border-b border-slate-200 font-bold text-emerald-700 bg-emerald-50/50">${hNum} hrs</td>
+                        </tr>
+                    `;
+                });
+
+                card.innerHTML = `
+                    <div class="bg-slate-900 text-white px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow">
+                                ${idx + 1}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-sm tracking-wide text-white uppercase">${doc.nombre}</h3>
+                                <p class="text-[11px] text-slate-400">Cód. Docente: <span class="text-red-400 font-mono font-bold">${doc.codigo}</span></p>
+                            </div>
+                        </div>
+                        <div class="bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow flex items-center gap-2">
+                            <i class="fa-solid fa-clock"></i>
+                            <span>Carga Horaria Total: ${totalHorasDocente} Horas</span>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase border-b border-slate-200">
+                                    <th class="py-2 px-3">Materia Asignada</th>
+                                    <th class="py-2 px-2 text-center">Sigla</th>
+                                    <th class="py-2 px-2 text-center">Semestre</th>
+                                    <th class="py-2 px-2 text-center">Grupo</th>
+                                    <th class="py-2 px-2 text-center">Carga Horaria</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 text-slate-700 font-medium">
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function exportToExcel() {
+            const worksheetData = [
+                ["UNIVERSIDAD AUTÓNOMA GABRIEL RENÉ MORENO"],
+                ["FACULTAD DE HUMANIDADES — CARRERA CIENCIAS DE LA EDUCACIÓN"],
+                ["MAESTRO DE OFERTA - PLAN 145 N (GESTIÓN 2026)"],
+                []
+            ];
+
+            worksheetData.push(["SEMESTRE / MENCIÓN", "GRUPO", "MATERIA", "SIGLA", "DOCENTE", "CÓD. DOCENTE", "HORAS", "HORARIO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"]);
+
+            masterData.forEach(item => {
+                worksheetData.push([
+                    item.semestre,
+                    item.grupo,
+                    item.materia,
+                    item.sigla,
+                    item.docente,
+                    item.codDocente,
+                    item.horas,
+                    item.horario,
+                    item.lunes,
+                    item.martes,
+                    item.miercoles,
+                    item.jueves,
+                    item.viernes,
+                    item.sabado
+                ]);
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+            XLSX.utils.book_append_sheet(wb, ws, "Maestro de Oferta");
+            XLSX.writeFile(wb, "Maestro_Oferta_Plan_145N_2026.xlsx");
+        }
+
+        function exportDocentesExcel() {
+            const worksheetData = [
+                ["UNIVERSIDAD AUTÓNOMA GABRIEL RENÉ MORENO"],
+                ["FACULTAD DE HUMANIDADES — CARRERA CIENCIAS DE LA EDUCACIÓN"],
+                ["RESUMEN DE CARGA HORARIA DOCENTE - PLAN 145 N (GESTIÓN 2026)"],
+                []
+            ];
+
+            worksheetData.push(["DOCENTE", "CÓDIGO DOCENTE", "MATERIA", "SIGLA", "SEMESTRE", "GRUPO", "HORAS"]);
+
+            masterData.forEach(item => {
+                worksheetData.push([
+                    item.docente || "NO ASIGNADO",
+                    item.codDocente || "S/C",
+                    item.materia,
+                    item.sigla,
+                    item.semestre,
+                    item.grupo,
+                    item.horas
+                ]);
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+            XLSX.utils.book_append_sheet(wb, ws, "Carga Docente");
+            XLSX.writeFile(wb, "Carga_Horaria_Docentes_2026.xlsx");
+        }
+
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('exportableArea');
+            
+            const actionCols = element.querySelectorAll('.action-col, button, select, input');
+            actionCols.forEach(el => el.style.visibility = 'hidden');
+
+            const origOverflow = element.style.overflow;
+            const origHeight = element.style.height;
+
+            element.style.overflow = 'visible';
+            element.style.height = 'auto';
+
+            try {
+                const canvas = await html2canvas(element, { 
+                    scale: 1.5, 
+                    useCORS: true,
+                    windowWidth: 1500,
+                    scrollY: -window.scrollY
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdf = new jsPDF('l', 'mm', 'a4');
+                const pdfWidth = 297; 
+                const pdfHeight = 210; 
+                const margin = 8;
+
+                const printWidth = pdfWidth - (margin * 2);
+                const printHeight = (canvas.height * printWidth) / canvas.width;
+
+                let heightLeft = printHeight;
+                let position = margin;
+
+                pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
+                heightLeft -= (pdfHeight - (margin * 2));
+
+                while (heightLeft > 0) {
+                    position = margin - (printHeight - heightLeft);
+                    pdf.addPage('a4', 'l');
+                    pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
+                    heightLeft -= (pdfHeight - (margin * 2));
+                }
+
+                pdf.save(`Reporte_SIGPA_CEDU_2026_${currentTab.toUpperCase()}.pdf`);
+            } catch (error) {
+                console.error("Error al generar PDF:", error);
+                alert("Hubo un error al generar el PDF.");
+            } finally {
+                element.style.overflow = origOverflow;
+                element.style.height = origHeight;
+                actionCols.forEach(el => el.style.visibility = 'visible');
+            }
+        }
+
+        async function exportDocentesPDF() {
+            switchTab('docentes');
+            setTimeout(() => {
+                exportToPDF();
+            }, 300);
+        }
+
+        function openAddModal() {
+            document.getElementById("modalTitle").textContent = "Añadir Nuevo Registro al Maestro de Oferta";
+            document.getElementById("editIndex").value = "-1";
+            document.getElementById("mSemestre").value = "PRIMER SEMESTRE";
+            document.getElementById("mSigla").value = "";
+            document.getElementById("mGrupo").value = "A";
+            document.getElementById("mMateria").value = "";
+            document.getElementById("mDocente").value = "";
+            document.getElementById("mCodDocente").value = "";
+            document.getElementById("mHoras").value = "";
+            document.getElementById("mHorario").value = "";
+            document.getElementById("mLunes").value = "";
+            document.getElementById("mMartes").value = "";
+            document.getElementById("mMiercoles").value = "";
+            document.getElementById("mJueves").value = "";
+            document.getElementById("mViernes").value = "";
+            document.getElementById("mSabado").value = "";
+            document.getElementById("crudModal").classList.remove("hidden");
+        }
+
+        function openEditModal(index) {
+            const item = masterData[index];
+            document.getElementById("modalTitle").textContent = "Modificar Registro Académico";
+            document.getElementById("editIndex").value = index;
+            document.getElementById("mSemestre").value = item.semestre;
+            document.getElementById("mSigla").value = item.sigla;
+            document.getElementById("mGrupo").value = item.grupo;
+            document.getElementById("mMateria").value = item.materia;
+            document.getElementById("mDocente").value = item.docente;
+            document.getElementById("mCodDocente").value = item.codDocente || "";
+            document.getElementById("mHoras").value = item.horas || "";
+            document.getElementById("mHorario").value = item.horario;
+            document.getElementById("mLunes").value = item.lunes || "";
+            document.getElementById("mMartes").value = item.martes || "";
+            document.getElementById("mMiercoles").value = item.miercoles || "";
+            document.getElementById("mJueves").value = item.jueves || "";
+            document.getElementById("mViernes").value = item.viernes || "";
+            document.getElementById("mSabado").value = item.sabado || "";
+            document.getElementById("crudModal").classList.remove("hidden");
+        }
+
+        function closeModal() {
+            document.getElementById("crudModal").classList.add("hidden");
+        }
+
+        function saveRecord() {
+            const index = parseInt(document.getElementById("editIndex").value);
+
+            const newRecord = {
+                semestre: document.getElementById("mSemestre").value.toUpperCase(),
+                sigla: document.getElementById("mSigla").value.toUpperCase(),
+                grupo: document.getElementById("mGrupo").value.toUpperCase(),
+                materia: document.getElementById("mMateria").value.toUpperCase(),
+                docente: document.getElementById("mDocente").value.toUpperCase(),
+                codDocente: document.getElementById("mCodDocente").value.trim(),
+                horas: document.getElementById("mHoras").value.trim(),
+                horario: document.getElementById("mHorario").value.trim(),
+                lunes: document.getElementById("mLunes").value,
+                martes: document.getElementById("mMartes").value,
+                miercoles: document.getElementById("mMiercoles").value,
+                jueves: document.getElementById("mJueves").value,
+                viernes: document.getElementById("mViernes").value,
+                sabado: document.getElementById("mSabado").value
+            };
+
+            if (index === -1) {
+                masterData.push(newRecord);
+            } else {
+                masterData[index] = newRecord;
+            }
+
+            closeModal();
+            if (currentTab === 'oferta') applyFilters();
+            else renderDocentesView();
+        }
+
+        function deleteRecord(index) {
+            if (confirm("¿Estás segura de eliminar este registro del maestro de oferta?")) {
+                masterData.splice(index, 1);
+                if (currentTab === 'oferta') applyFilters();
+                else renderDocentesView();
+            }
+        }
+
+        // CARGA Y FILTRADO MEJORADO PARA DESCARTAR CUALQUIER ENCABEZADO REPETIDO O BASURA
+        function handleExcelUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            let combined = [];
+            let loaded = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    workbook.SheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+
+                        let currentSemestre = "PRIMER SEMESTRE";
+                        let currentGrupo = "A";
+
+                        json.forEach(row => {
+                            if (!row || row.length === 0) return;
+                            
+                            const getVal = (idx) => (row[idx] !== undefined && row[idx] !== null) ? String(row[idx]).trim() : "";
+                            const rowText = row.join(" ").toUpperCase();
+
+                            // Detección precisa de menciones y semestres
+                            if (rowText.includes("PSICOPEDAGOGIA")) {
+                                currentSemestre = "MENCIÓN: PSICOPEDAGOGÍA";
+                            } else if (rowText.includes("EDUCACION SOCIAL")) {
+                                currentSemestre = "MENCIÓN: EDUCACIÓN SOCIAL";
+                            } else if (rowText.includes("TECNOLOGIA EDUCATIVA")) {
+                                currentSemestre = "MENCIÓN: TECNOLOGÍA EDUCATIVA";
+                            } else if (rowText.includes("SEMESTRE")) {
+                                currentSemestre = rowText;
+                            }
+
+                            if (rowText.includes("GRUPO")) {
+                                currentGrupo = rowText;
+                            }
+
+                            const materia = getVal(0);
+                            const sigla = getVal(1);
+                            const grupo = getVal(2) || currentGrupo;
+                            const docente = getVal(3);
+                            const codDocente = getVal(4);
+                            const horario = getVal(5);
+                            const horas = getVal(6);
+                            
+                            const registro = {
+                                semestre: currentSemestre,
+                                grupo: grupo,
+                                materia: materia,
+                                sigla: sigla,
+                                docente: docente,
+                                codDocente: codDocente,
+                                horario: horario,
+                                horas: horas,
+                                lunes: getVal(7),
+                                martes: getVal(8),
+                                miercoles: getVal(9),
+                                jueves: getVal(10),
+                                viernes: getVal(11),
+                                sabado: getVal(12)
+                            };
+
+                            // FILTRO ESTRICTO REFORZADO PARA DESCARTAR ENCABEZADOS Y FILAS BASURA O REPETIDAS
+                            const isHeaderRow = (
+                                materia.toUpperCase() === "MATERIA" ||
+                                sigla.toUpperCase() === "SIGLA" ||
+                                materia.toUpperCase().includes("MAESTRO DE OFERTA") ||
+                                materia.toUpperCase().includes("CARRERA CIENCIAS DE LA EDUCACION") ||
+                                rowText.includes("MATERIA SIGLA") ||
+                                rowText.includes("HORARIO MATERIA") ||
+                                rowText.includes("PLAN 145 N") ||
+                                rowText.includes("AGOSTO") ||
+                                sigla.length <= 1 ||
+                                sigla.toUpperCase() === "SIGLA"
+                            );
+
+                            if (!isHeaderRow && sigla.length > 2 && materia.toUpperCase() !== "MATERIA" && sigla.toUpperCase() !== "HORARIO") {
+                                combined.push(registro);
+                            }
+                        });
+                    });
+
+                    loaded++;
+                    if (loaded === files.length) {
+                        masterData = combined;
+                        applyFilters();
+                        document.getElementById("uploadAlertText").textContent = `Archivo procesado con éxito. Se cargaron ${combined.length} registros limpios de encabezados ociosos.`;
+                        document.getElementById("uploadAlert").classList.remove("hidden");
+                    }
+                };
+                reader.readAsArrayBuffer(files[i]);
+            }
+        }
+
+        function applyFilters() {
+            const semestre = document.getElementById("filterSemestre").value;
+            const query = document.getElementById("searchInput").value.toLowerCase();
+
+            const filtered = masterData.filter(item => {
+                if (item.materia.toUpperCase() === "MATERIA" || item.sigla.toUpperCase() === "SIGLA" || item.sigla.toUpperCase() === "HORARIO") return false;
+
+                const matchSem = (semestre === 'all' || item.semestre.toUpperCase().includes(semestre.toUpperCase()));
+                const matchQuery = (
+                    item.materia.toLowerCase().includes(query) || 
+                    item.sigla.toLowerCase().includes(query) || 
+                    item.docente.toLowerCase().includes(query) ||
+                    item.codDocente.toLowerCase().includes(query)
+                );
+                return matchSem && matchQuery;
+            });
+
+            renderExcelTables(filtered);
+        }
+
+        applyFilters();
+    </script>
+</body>
+</html>
